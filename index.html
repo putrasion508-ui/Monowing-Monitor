@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monowing Monitor Data Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f4f8; --surface: #ffffff; --surface2: #f8fafc;
+    --border: #dde3ea; --accent: #2563eb; --accent2: #06b6d4;
+    --text: #1e293b; --text-dim: #64748b; --text-muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-brand { display: flex; align-items: center; gap: 12px; }
+  .header-icon { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px; }
+  .header-label { font-size: 9px; color: var(--accent); letter-spacing: 3px; font-family: 'IBM Plex Mono', monospace; }
+  .header-title { font-size: 17px; font-weight: 700; color: #1e293b; }
+  .header-date { font-size: 11px; color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; }
+
+  .layout { display: flex; flex: 1; height: calc(100vh - 57px); overflow: hidden; }
+
+  aside { width: 220px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-label { font-size: 9px; letter-spacing: 3px; color: var(--text-muted); padding: 14px 16px 8px; font-family: 'IBM Plex Mono', monospace; }
+  #equipment-list { flex: 1; overflow-y: auto; }
+  .eq-item { padding: 10px 14px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.15s; }
+  .eq-item:hover { background: var(--surface2); }
+  .eq-item.active { background: var(--surface2); border-left-color: var(--accent); }
+  .eq-top { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .eq-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .eq-name { font-size: 12px; font-weight: 600; color: #5a7a94; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .eq-item.active .eq-name { color: #1e293b; }
+  .eq-tags { display: flex; flex-wrap: wrap; gap: 4px; padding-left: 16px; }
+  .eq-tag { font-size: 9px; font-family: 'IBM Plex Mono', monospace; background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.15); color: #3b5268; padding: 1px 6px; border-radius: 3px; }
+  .eq-item.active .eq-tag { color: #5a9fd4; border-color: rgba(59,130,246,0.3); }
+  .eq-delete { opacity: 0; font-size: 13px; color: #ef4444; background: none; border: none; cursor: pointer; padding: 1px 4px; flex-shrink: 0; }
+  .eq-item:hover .eq-delete { opacity: 1; }
+
+  .upload-area { position:relative; margin: 10px; border: 2px dashed var(--border); border-radius: 8px; padding: 14px 10px; text-align: center; cursor: pointer; color: var(--text-muted); font-size: 11px; transition: all 0.2s; font-family: 'IBM Plex Mono', monospace; display:block; }
+  .upload-area:hover, .upload-area.drag { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.05); }
+  .upload-icon { font-size: 20px; margin-bottom: 4px; }
+  .upload-sub { font-size: 9px; color: var(--text-muted); margin-top: 3px; }
+
+  main { flex: 1; overflow-y: auto; padding: 16px 20px; min-width: 0; }
+  .main-title { font-size: 15px; font-weight: 700; color: #e2edf7; margin-bottom: 10px; }
+
+  .device-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 20px; }
+  .device-label { font-size: 9px; color: var(--text-muted); letter-spacing: 2px; font-family: 'IBM Plex Mono', monospace; margin-bottom: 2px; }
+  .device-value { font-size: 13px; font-weight: 600; color: #1e293b; font-family: 'IBM Plex Mono', monospace; }
+
+  /* Chart card */
+  .chart-card { display: flex; align-items: stretch; background: #ffffff; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+
+  .chart-left { flex-shrink: 0; width: 140px; padding: 10px 12px; border-right: 1px solid var(--border); background: #f1f5f9; display: flex; flex-direction: column; justify-content: center; gap: 7px; }
+  .chart-header { display: flex; align-items: center; gap: 7px; }
+  .chart-stripe { width: 3px; height: 16px; border-radius: 2px; flex-shrink: 0; }
+  .chart-title { font-size: 11px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; color: #1e293b; }
+  .chart-unit { font-size: 9px; color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; }
+  .chart-stats { display: flex; flex-direction: column; gap: 4px; padding-left: 10px; }
+  .stat { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+  .stat-val { font-size: 11px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
+  .stat-label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; }
+
+  /* Scrollable chart area — width set by JS to 3x container width */
+  .chart-right { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; padding: 6px 8px; }
+  .chart-right::-webkit-scrollbar { height: 4px; }
+  .chart-right::-webkit-scrollbar-track { background: transparent; }
+  .chart-right::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  .chart-wrap { position: relative; height: 95px; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--text-muted); text-align: center; }
+  .empty-icon { font-size: 44px; margin-bottom: 14px; opacity: 0.3; }
+  .empty-text { font-size: 14px; margin-bottom: 5px; }
+  .empty-sub { font-size: 11px; font-family: 'IBM Plex Mono', monospace; }
+
+  .btn-download {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.35);
+    color: var(--accent); font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; letter-spacing: 1px; padding: 6px 14px;
+    border-radius: 6px; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-download:hover { background: rgba(59,130,246,0.25); border-color: var(--accent); }
+  .btn-download:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-download .ico { font-size: 14px; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div class="header-icon">📡</div>
+    <div>
+      <div class="header-label">◆ MONOWING MONITOR</div>
+      <div class="header-title">Data Dashboard</div>
+    </div>
+  </div>
+  <div class="header-date" id="header-date"></div>
+  <button class="btn-download" id="btn-download" onclick="downloadAllCharts()">
+    <span class="ico">⬇</span> Download
+  </button>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="sidebar-label">EQUIPMENT LIST</div>
+    <div id="equipment-list"></div>
+    <div class="upload-area" id="drop-zone">
+      <div class="upload-icon">＋</div>
+      <div>Click to Upload CSV</div>
+      <div class="upload-sub">Format: MwData CSV</div>
+      <input type="file" id="file-input" accept=".csv" multiple
+        style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;">
+    </div>
+  </aside>
+
+  <main id="main">
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">📊</div>
+      <div class="empty-text">No equipment data</div>
+      <div class="empty-sub">Upload a MwData CSV file to start</div>
+      <br>
+      <div style="position:relative;display:inline-block;margin-top:8px;">
+        <div style="background:#2563eb;color:#fff;font-family:monospace;font-size:13px;padding:12px 24px;border-radius:8px;cursor:pointer;">
+          ＋ Upload CSV File
+        </div>
+        <input type="file" accept=".csv" multiple
+          style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;"
+          onchange="handleFiles(this.files)">
+      </div>
+    </div>
+    <div id="charts-area" style="display:none">
+      <div class="main-title" id="eq-title"></div>
+      <div class="device-card" id="device-info"></div>
+      <div id="charts-container"></div>
+    </div>
+  </main>
+</div>
+
+<footer>
+  <span></span>
+  <span id="footer-count">0 equipment registered</span>
+</footer>
+
+<script>
+const COLORS = ['#1d4ed8','#c2410c','#15803d','#b91c1c','#7e22ce','#0e7490'];
+
+const SHOW_METRICS = [
+  { prefix: 'ActuatorPos', label: 'ActuatorPos', unit: 'mm',  color: COLORS[0] },
+  { prefix: 'BoomAngle',   label: 'BoomAngle',   unit: 'Deg', color: COLORS[1] },
+  { prefix: 'AccPress',    label: 'AccPress',     unit: 'Bar', color: COLORS[2] },
+  { prefix: 'Battery',     label: 'Battery',      unit: 'V',   color: COLORS[3] },
+  { prefix: 'InputV',      label: 'InputV',       unit: 'V',   color: COLORS[4] },
+];
+
+const DEVICE_FIELDS = [
+  { key: 'Monowing no', label: 'MONOWING NO' },
+];
+
+// Max data points to render — 3x the "original" comfortable amount
+const MAX_POINTS = 1000;
+
+let equipments = [];
+let selectedIndex = -1;
+let chartInstances = [];
+
+// Sample data evenly: pick exactly `maxPts` points spread across all data
+function sampleData(data, maxPts) {
+  if (data.length <= maxPts) return data;
+  const step = data.length / maxPts;
+  const result = [];
+  for (let i = 0; i < maxPts; i++) {
+    result.push(data[Math.round(i * step)]);
+  }
+  return result;
+}
+
+function parseMwCSV(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  const deviceInfo = {};
+  let headerLineIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^Time\s*,/i.test(line)) { headerLineIndex = i; break; }
+    const m = line.match(/^([A-Za-z][A-Za-z0-9 \/]+?)\s{2,}(.+)$/);
+    if (m) deviceInfo[m[1].trim()] = m[2].trim();
+  }
+  if (headerLineIndex === -1) return { deviceInfo, data: [] };
+  const headers = lines[headerLineIndex].split(',').map(h => h.trim()).filter(h => h);
+  const data = [];
+  for (let i = headerLineIndex + 1; i < lines.length; i++) {
+    if (!lines[i]) continue;
+    const vals = lines[i].split(',').map(v => v.trim());
+    const row = {};
+    headers.forEach((h, j) => { const n = parseFloat(vals[j]); row[h] = isNaN(n) ? (vals[j]||'') : n; });
+    if (Object.keys(row).some(k => k.trim().toLowerCase() === 'time')) data.push(row);
+  }
+  return { deviceInfo, data };
+}
+
+function getDeviceName(deviceInfo, fileName) {
+  const mwNo = deviceInfo['Monowing no'];
+  const pos  = deviceInfo['Monowing position'];
+  if (mwNo) return `Monowing ${mwNo}${pos ? ' — ' + pos : ''}`;
+  return fileName.replace(/\.csv$/i, '').replace(/[_-]/g, ' ');
+}
+
+function findKey(row, prefix) {
+  return Object.keys(row).find(k => k.startsWith(prefix));
+}
+
+function renderSidebar() {
+  const list = document.getElementById('equipment-list');
+  list.innerHTML = '';
+  equipments.forEach((eq, i) => {
+    const item = document.createElement('div');
+    item.className = 'eq-item' + (i === selectedIndex ? ' active' : '');
+    const tags = [];
+    if (eq.deviceInfo['Monowing no']) tags.push('MW #' + eq.deviceInfo['Monowing no']);
+    item.innerHTML = `
+      <div class="eq-top">
+        <div class="eq-dot" style="background:${COLORS[i % COLORS.length]}"></div>
+        <div class="eq-name">${eq.name}</div>
+        <button class="eq-delete" onclick="deleteEq(event,${i})">✕</button>
+      </div>
+      <div class="eq-tags">${tags.map(t=>`<span class="eq-tag">${t}</span>`).join('')}</div>
+    `;
+    item.addEventListener('click', () => selectEq(i));
+    list.appendChild(item);
+  });
+  document.getElementById('footer-count').textContent = `${equipments.length} equipment registered`;
+}
+
+function selectEq(i) { selectedIndex = i; renderSidebar(); renderCharts(); }
+
+function deleteEq(e, i) {
+  e.stopPropagation();
+  equipments.splice(i, 1);
+  if (selectedIndex >= equipments.length) selectedIndex = equipments.length - 1;
+  renderSidebar(); renderCharts();
+}
+
+function renderCharts() {
+  chartInstances.forEach(c => c.destroy());
+  chartInstances = [];
+
+  const empty     = document.getElementById('empty-state');
+  const area      = document.getElementById('charts-area');
+  const container = document.getElementById('charts-container');
+  const deviceInfoEl = document.getElementById('device-info');
+
+  if (selectedIndex < 0 || !equipments[selectedIndex]) {
+    empty.style.display = 'flex'; area.style.display = 'none'; return;
+  }
+  empty.style.display = 'none'; area.style.display = 'block';
+
+  const eq = equipments[selectedIndex];
+  document.getElementById('eq-title').textContent = eq.name;
+
+  // Device info
+  const shownFields = DEVICE_FIELDS.filter(f => eq.deviceInfo[f.key]);
+  deviceInfoEl.innerHTML = shownFields.map(f => `
+    <div class="device-field">
+      <div class="device-label">${f.label}</div>
+      <div class="device-value">${eq.deviceInfo[f.key]}</div>
+    </div>
+  `).join('');
+
+  // Sample data evenly to MAX_POINTS
+  const sampled = sampleData(eq.data, MAX_POINTS);
+  const totalPts = eq.data.length;
+  const usedPts  = sampled.length;
+  const sampleStep = totalPts > MAX_POINTS ? Math.round(totalPts / MAX_POINTS) : 1;
+
+  // Append sample info
+  deviceInfoEl.innerHTML += `
+    <div class="device-field">
+      <div class="device-label">DATA TOTAL</div>
+      <div class="device-value">${totalPts.toLocaleString()} pts</div>
+    </div>
+    <div class="device-field">
+      <div class="device-label">SAMPLE RATE</div>
+      <div class="device-value">1 per ${sampleStep} pts</div>
+    </div>
+  `;
+
+  container.innerHTML = '';
+  // Find actual Time key (may have leading/trailing spaces)
+  const timeKey = Object.keys(sampled[0] || {}).find(k => k.trim().toLowerCase() === 'time') || 'Time';
+  const labels   = sampled.map(d => (d[timeKey] || '').toString().trim());
+  const firstRow = sampled[0] || {};
+
+  // Chart width = 3x the main panel available width
+  const mainEl    = document.getElementById('main');
+  const available = mainEl.clientWidth - 40; // subtract padding
+  const chartW    = Math.round(available * 3);
+
+  // Sync scroll across all chart-right elements
+  let syncing = false;
+  function syncScroll(src) {
+    if (syncing) return; syncing = true;
+    document.querySelectorAll('.chart-right').forEach(el => { if (el !== src) el.scrollLeft = src.scrollLeft; });
+    syncing = false;
+  }
+
+  SHOW_METRICS.forEach((metric, mi) => {
+    const dataKey = findKey(firstRow, metric.prefix);
+    if (!dataKey) return;
+
+    const vals    = sampled.map(d => typeof d[dataKey] === 'number' ? d[dataKey] : null);
+    const numVals = vals.filter(v => v !== null);
+    if (!numVals.length) return;
+
+    const minV  = Math.min(...numVals);
+    const maxV  = Math.max(...numVals);
+    const lastV = numVals[numVals.length - 1];
+    const color = metric.color;
+    const pad   = (maxV - minV) * 0.12 || 0.05;
+    const yMin  = minV - pad;
+    const yMax  = maxV + pad;
+
+    // Label: show ~8 evenly spaced time labels
+    const labelStep = Math.max(1, Math.floor(labels.length / 8));
+    const displayLabels = labels.map((l, i) => {
+      if (i % labelStep !== 0) return '';
+      // Extract just time portion (HH:MM:SS) if timestamp has date+time
+      const str = String(l);
+      const timePart = str.includes(' ') ? str.split(' ')[1] : str;
+      return timePart || str;
+    });
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.innerHTML = `
+      <div class="chart-left">
+        <div class="chart-header">
+          <div class="chart-stripe" style="background:${color}"></div>
+          <div>
+            <div class="chart-title">${metric.label}</div>
+            <div class="chart-unit">[${metric.unit}]</div>
+          </div>
+        </div>
+        <div class="chart-stats">
+          <div class="stat"><span class="stat-label">LAST</span><span class="stat-val" style="color:${color}">${lastV.toFixed(2)}</span></div>
+          <div class="stat"><span class="stat-label">MIN</span><span class="stat-val">${minV.toFixed(2)}</span></div>
+          <div class="stat"><span class="stat-label">MAX</span><span class="stat-val">${maxV.toFixed(2)}</span></div>
+        </div>
+      </div>
+      <div class="chart-right" id="cr-${mi}">
+        <div class="chart-wrap" style="width:${chartW}px">
+          <canvas id="chart-${mi}"></canvas>
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+
+    setTimeout(() => {
+      const crEl = document.getElementById(`cr-${mi}`);
+      if (crEl) crEl.addEventListener('scroll', () => syncScroll(crEl));
+    }, 0);
+
+    const ctx = document.getElementById(`chart-${mi}`).getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      plugins: [{
+        id: 'whiteBg',
+        beforeDraw: (chart) => {
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, chart.width, chart.height);
+          ctx.restore();
+        }
+      }],
+      data: {
+        labels: displayLabels,
+        datasets: [{
+          data: vals,
+          rawLabels: labels,
+          borderColor: color, borderWidth: 2,
+          pointRadius: 0, pointHoverRadius: 4,
+          pointHoverBackgroundColor: color,
+          tension: 0.3, fill: false,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: { duration: 400 },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#ffffff', borderColor: color, borderWidth: 1,
+            titleColor: '#64748b', bodyColor: '#1e293b',
+            bodyFont: { family: 'IBM Plex Mono', size: 12 },
+            titleFont: { family: 'IBM Plex Mono', size: 10 },
+            callbacks: {
+              title: (items) => labels[items[0].dataIndex] || '',
+              label: (item) => ` ${metric.label}: ${item.raw !== null ? item.raw : 'N/A'} ${metric.unit}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: '#e2e8f0', drawTicks: false },
+            border: { display: false },
+            ticks: { color: '#64748b', font: { family: 'IBM Plex Mono', size: 10 }, maxRotation: 0,
+              callback: function(val, i) { return displayLabels[i] || ''; }
+            }
+          },
+          y: {
+            min: yMin, max: yMax,
+            grid: { color: '#e2e8f0', drawTicks: false },
+            border: { display: false },
+            ticks: { color: '#64748b', font: { family: 'IBM Plex Mono', size: 10 }, maxTicksLimit: 4 }
+          }
+        }
+      }
+    });
+    chartInstances.push(chart);
+  });
+
+  // Scroll to latest (rightmost) data
+  setTimeout(() => {
+    document.querySelectorAll('.chart-right').forEach(el => { el.scrollLeft = el.scrollWidth; });
+  }, 500);
+  // Always enable download button
+  document.getElementById('btn-download').disabled = false;
+}
+
+async function loadCSV(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const { deviceInfo, data } = parseMwCSV(e.target.result);
+        resolve({ id: Date.now()+Math.random(), name: getDeviceName(deviceInfo, file.name), deviceInfo, data, fileName: file.name });
+      } catch(err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsText(file);
+  });
+}
+
+async function handleFiles(files) {
+  for (const file of files) {
+    if (!file.name.toLowerCase().endsWith('.csv')) continue;
+    try {
+      const eq = await loadCSV(file);
+      equipments.push(eq);
+      selectedIndex = equipments.length - 1;
+    } catch { alert('Failed to read: ' + file.name); }
+  }
+  renderSidebar(); renderCharts();
+}
+
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  await handleFiles(e.target.files);
+  e.target.value = '';
+});
+
+const dropZone = document.getElementById('drop-zone');
+if (dropZone) {
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', async e => {
+    e.preventDefault(); dropZone.classList.remove('drag');
+    for (const file of e.dataTransfer.files) {
+      if (!file.name.toLowerCase().endsWith('.csv')) continue;
+      try { const eq = await loadCSV(file); equipments.push(eq); selectedIndex = equipments.length-1; }
+      catch { alert('Failed to read: ' + file.name); }
+    }
+    renderSidebar(); renderCharts();
+  });
+}
+
+document.getElementById('header-date').textContent =
+  new Date().toLocaleDateString('en-US', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
+
+async function downloadAllCharts() {
+  const eq = equipments[selectedIndex];
+  if (!eq || chartInstances.length === 0) return;
+
+  const btn = document.getElementById('btn-download');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="ico">⏳</span> Preparing...';
+
+  try {
+    const SCALE   = 2;
+    const PAD     = 32;
+    const LEFT_W  = 200;
+    const ROW_H   = 180;
+    const GAP     = 12;
+    const TITLE_H = 56;
+    const INFO_H  = 70;
+    const FULL_W  = 1400; // fixed full width for export
+
+    const visibleMetrics = SHOW_METRICS.filter((m, i) => chartInstances[i]);
+    const totalH = (TITLE_H + INFO_H + PAD + visibleMetrics.length * (ROW_H + GAP) + PAD) * SCALE;
+    const totalW = (LEFT_W + FULL_W + PAD * 2) * SCALE;
+
+    const out = document.createElement('canvas');
+    out.width  = totalW;
+    out.height = totalH;
+    const ctx  = out.getContext('2d');
+    ctx.scale(SCALE, SCALE);
+
+    const W = totalW / SCALE;
+    const H = totalH / SCALE;
+
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+
+    // Title
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(eq.name || '', PAD, PAD + 22);
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px monospace';
+    ctx.fillText(new Date().toLocaleDateString('en-US', { weekday:'short', year:'numeric', month:'short', day:'numeric' }), PAD, PAD + 42);
+
+    // Info bar
+    const infoY = TITLE_H + 4;
+    ctx.fillStyle = '#f1f5f9';
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    roundRect(ctx, PAD, infoY, W - PAD*2, INFO_H - 8, 6);
+    ctx.fill(); ctx.stroke();
+
+    const fields = [
+      ['MONOWING NO', eq.deviceInfo['Monowing no'] || '-'],
+      ['DATA TOTAL',  eq.data.length.toLocaleString() + ' pts'],
+      ['SAMPLE RATE', '1 per ' + Math.round(eq.data.length / MAX_POINTS) + ' pts'],
+    ];
+    fields.forEach(([lbl, val], i) => {
+      const fx = PAD + 16 + i * 220;
+      ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace';
+      ctx.fillText(lbl, fx, infoY + 18);
+      ctx.fillStyle = '#0f172a'; ctx.font = 'bold 14px monospace';
+      ctx.fillText(val, fx, infoY + 38);
+    });
+
+    // Draw each chart row by re-rendering onto a temp full-width canvas
+    let y = TITLE_H + INFO_H + PAD;
+
+    for (let mi = 0; mi < visibleMetrics.length; mi++) {
+      const metric = visibleMetrics[mi];
+      const chart  = chartInstances[mi];
+      if (!chart) continue;
+
+      const vals  = chart.data.datasets[0].data.filter(v => v !== null);
+      const minV  = Math.min(...vals);
+      const maxV  = Math.max(...vals);
+      const lastV = vals[vals.length - 1];
+      const color = metric.color;
+      const pad2  = (maxV - minV) * 0.12 || 0.05;
+      const yMin2 = minV - pad2;
+      const yMax2 = maxV + pad2;
+
+      // Card background
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      roundRect(ctx, PAD, y, W - PAD*2, ROW_H, 8);
+      ctx.fill(); ctx.stroke();
+
+      // Left panel
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#e2e8f0';
+      roundRectLeft(ctx, PAD, y, LEFT_W, ROW_H, 8);
+      ctx.fill(); ctx.stroke();
+
+      // Accent stripe
+      ctx.fillStyle = color;
+      ctx.fillRect(PAD + 12, y + 14, 4, 20);
+
+      // Metric name
+      ctx.fillStyle = '#0f172a'; ctx.font = 'bold 13px monospace';
+      ctx.fillText(metric.label, PAD + 22, y + 28);
+      ctx.fillStyle = '#64748b'; ctx.font = '11px monospace';
+      ctx.fillText('[' + metric.unit + ']', PAD + 22, y + 44);
+
+      // Stats
+      [['LAST', lastV, color], ['MIN', minV, '#334155'], ['MAX', maxV, '#334155']].forEach(([lbl, val, clr], si) => {
+        const sy = y + 72 + si * 30;
+        ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace';
+        ctx.fillText(lbl, PAD + 14, sy);
+        ctx.fillStyle = clr; ctx.font = 'bold 14px monospace';
+        ctx.fillText(val?.toFixed(2) ?? '-', PAD + LEFT_W - 78, sy);
+      });
+
+      // Divider
+      ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(PAD + LEFT_W, y);
+      ctx.lineTo(PAD + LEFT_W, y + ROW_H);
+      ctx.stroke();
+
+      // Render chart onto temp full-width canvas (must be in DOM for mobile)
+      const tmpCanvas = document.createElement('canvas');
+      const chartAreaW = FULL_W - 16;
+      const chartAreaH = ROW_H - 16;
+      tmpCanvas.width  = chartAreaW;
+      tmpCanvas.height = chartAreaH;
+      tmpCanvas.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+      document.body.appendChild(tmpCanvas);
+
+      const allData   = chart.data.datasets[0].data;
+      const rawLabels = chart.data.datasets[0].rawLabels || [];
+
+      // Build display labels: ~10 evenly spaced time labels
+      const dlStep = Math.max(1, Math.floor(rawLabels.length / 10));
+      const allLabels = rawLabels.map((l, i) => {
+        if (i % dlStep !== 0) return '';
+        const str = String(l);
+        return str.includes(' ') ? str.split(' ')[1] : str;
+      });
+
+      const tmpChart = new Chart(tmpCanvas, {
+        type: 'line',
+        plugins: [{
+          id: 'whiteBg',
+          beforeDraw: (c) => {
+            c.ctx.save(); c.ctx.fillStyle = '#ffffff';
+            c.ctx.fillRect(0, 0, c.width, c.height); c.ctx.restore();
+          }
+        }],
+        data: {
+          labels: allLabels,
+          datasets: [{
+            data: allData,
+            borderColor: color, borderWidth: 2,
+            pointRadius: 0, tension: 0.3, fill: false,
+          }]
+        },
+        options: {
+          responsive: false, maintainAspectRatio: false,
+          animation: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: {
+            x: {
+              grid: { color: '#e2e8f0' }, border: { display: false },
+              ticks: { color: '#334155', font: { size: 11 }, maxRotation: 0,
+                maxTicksLimit: 10,
+                callback: function(val, i) { return allLabels[i] || ''; }
+              }
+            },
+            y: {
+              min: yMin2, max: yMax2,
+              grid: { color: '#e2e8f0' }, border: { display: false },
+              ticks: { color: '#334155', font: { size: 11 }, maxTicksLimit: 4 }
+            }
+          }
+        }
+      });
+
+      // Wait longer for mobile render
+      await new Promise(r => setTimeout(r, 150));
+      ctx.drawImage(tmpCanvas, PAD + LEFT_W + 8, y + 8, chartAreaW, chartAreaH);
+      tmpChart.destroy();
+      document.body.removeChild(tmpCanvas);
+
+      y += ROW_H + GAP;
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+      ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+      ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+      ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+    }
+    function roundRectLeft(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x+r,y); ctx.lineTo(x+w,y); ctx.lineTo(x+w,y+h);
+      ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+      ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+    }
+
+    const dataUrl  = out.toDataURL('image/png');
+    const safeName = (eq.name || 'monowing').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const fileName = `${safeName}_${new Date().toISOString().slice(0,10)}.png`;
+
+    const isIOS    = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    if (isIOS || isSafari) {
+      const newTab = window.open();
+      if (newTab) {
+        newTab.document.write(`<!DOCTYPE html><html><head>
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>${fileName}</title>
+          <style>body{margin:0;background:#000;display:flex;flex-direction:column;align-items:center;padding:12px}
+          p{color:#fff;font-family:sans-serif;font-size:13px;text-align:center;background:rgba(255,255,255,0.1);border-radius:8px;padding:10px 16px;margin-bottom:10px}
+          img{max-width:100%;border-radius:4px}</style></head>
+          <body><p>📥 Press & hold image → <b>Save to Photos</b></p>
+          <img src="${dataUrl}" alt="${fileName}"></body></html>`);
+        newTab.document.close();
+      } else {
+        showImageModal(dataUrl, fileName);
+      }
+    } else {
+      const link = document.createElement('a');
+      link.download = fileName; link.href = dataUrl;
+      document.body.appendChild(link); link.click();
+      document.body.removeChild(link);
+    }
+
+  } catch(err) {
+    alert('Download failed: ' + err.message);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span class="ico">⬇</span> Download';
+}
+
+function showImageModal(dataUrl, fileName) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:16px;';
+  overlay.innerHTML = `
+    <div style="color:#fff;font-family:sans-serif;font-size:13px;text-align:center;background:rgba(59,130,246,0.2);border:1px solid #3b82f6;border-radius:8px;padding:10px 16px;margin-bottom:12px;max-width:340px;">
+      📥 Press & hold the image below → <b>Save to Photos</b>
+      <br><br>
+      <button onclick="this.closest('div').parentElement.remove()" style="background:#3b82f6;color:#fff;border:none;padding:6px 18px;border-radius:6px;font-size:12px;cursor:pointer;">✕ Close</button>
+    </div>
+    <img src="${dataUrl}" style="max-width:100%;border-radius:8px;" alt="${fileName}">
+  `;
+  document.body.appendChild(overlay);
+}
+
+renderSidebar(); renderCharts();
+</script>
+</body>
+</html>
